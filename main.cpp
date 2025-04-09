@@ -16,10 +16,11 @@ void usage() {
 	printf("sample: main wlan0 192.168.10.2 192.168.10.1\n");
 }
 
-int get_mac(const char* dev, uint8_t* mac) {
+int get_mac_ip(const char* dev, uint8_t* mac, char* ip) {
 	libnet_t* ln = libnet_init(LIBNET_LINK, dev, NULL);
 	if (ln == NULL) {
 		fprintf(stderr, "libnet_init failed\n");
+		libnet_destroy(ln);
 		return -1;
 	}
 
@@ -31,6 +32,22 @@ int get_mac(const char* dev, uint8_t* mac) {
 	}
 
 	memcpy(mac, my_mac->ether_addr_octet, 6);
+
+	uint32_t ip_addr = libnet_get_ipaddr4(ln);
+	if (ip_addr == -1) {
+		fprintf(stderr, "libnet_get_ipaddr4 failed\n");
+		libnet_destroy(ln);
+		return -1;
+	}
+
+	struct in_addr addr;
+	addr.s_addr = ip_addr;
+	if (inet_ntop(AF_INET, &addr, ip, 16) == NULL) {
+		fprintf(stderr, "inet_ntop failed\n");
+		libnet_destroy(ln);
+		return -1;
+	}
+
 	libnet_destroy(ln);
 	return 0;
 }
@@ -163,8 +180,9 @@ int main(int argc, char* argv[]) {
 	char errbuf[PCAP_ERRBUF_SIZE];
 
 	uint8_t my_mac[6];
-	if (get_mac(dev, my_mac) != 0) {
-		fprintf(stderr, "Failed to get my MAC address\n");
+	char my_ip[16];
+	if (get_mac_ip(dev, my_mac, my_ip) != 0) {
+		fprintf(stderr, "Failed to get my MAC, IP address\n");
 		return -1;
 	}
 
@@ -182,8 +200,6 @@ int main(int argc, char* argv[]) {
 		pcap_close(pcap);
 		return -1;
 	}
-
-	char my_ip[16] = "0.0.0.0";
 
 	for (int i = 0; i < cnt; i++) {
 		int arg_index = 2 + i * 2;
